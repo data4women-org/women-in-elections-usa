@@ -1,32 +1,34 @@
+import json
 from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 DATA = Path(__file__).resolve().parent / "data"
 STATE = "State"
+STATE_NAME = "State Name"
 WOMEN_2024 = "Women in 2024"
 WOMEN_2026 = "Women in 2026"
-SEATS = "Seats in 2024"
+SEATS = "Seats in 2026"
 PERCENT = "Women in 2026 (%)"
 CHANGE = "Difference (2026 − 2024)"
 PARTIES = {"All": None, "Democratic": "D", "Republican": "R"}
 
 
 @st.cache_data
-def load_data(party=None):
+def load_data(party=None, seats_column=SEATS):
     results = pd.read_csv(
         DATA / "1976-2024-house.tab",
-        usecols=["year", "state_po", "district"],
+        usecols=["year", "state", "state_po", "district"],
     )
     seats = (
         # DC has a representative, but a special one, not a state representative, so we exclude it from the count of seats.
         results.loc[(results["year"] == 2024) & (results["state_po"] != "DC")]
         .drop_duplicates(["state_po", "district"])
         .groupby("state_po")
-        .size()
-        .rename(SEATS)
+        .agg(**{seats_column: ("district", "size"), STATE_NAME: ("state", "first")})
     )
 
     candidates = pd.read_excel(DATA / "women_candidates_2024.xlsx", sheet_name="Data")
@@ -41,7 +43,7 @@ def load_data(party=None):
 
     keys = ["State", "First Name", "Last Name", "Party"]
 
-    states = seats.to_frame()
+    states = seats.copy()
     for label, rows in [(WOMEN_2024, women_2024), (WOMEN_2026, women_2026)]:
         if party is not None:
             rows = rows.loc[rows["Party"].eq(party)]
@@ -49,7 +51,7 @@ def load_data(party=None):
         states[label] = counts.reindex(states.index, fill_value=0)
 
     # Note: The number of seats by state in 2026 is the same as the 2024.
-    states[PERCENT] = 100 * states[WOMEN_2026] / states[SEATS]
+    states[PERCENT] = 100 * states[WOMEN_2026] / states[seats_column]
     states[CHANGE] = states[WOMEN_2026] - states[WOMEN_2024]
     return states.rename_axis(STATE).reset_index()
 
@@ -59,16 +61,31 @@ def main():
         page_title="Women in the U.S. House of Representatives", layout="wide"
     )
     st.title("Women in the U.S. House of Representatives")
+    metadata = json.loads((DATA / "metadata.json").read_text(encoding="utf-8"))
+    st.caption(f"Last update: {metadata['last_update']}")
     mode = st.radio("View", ["Percentage", "Absolute Difference"], horizontal=True)
     party = st.selectbox("Party", list(PARTIES), index=0)
-    states = load_data(PARTIES[party])
+    states = load_data(PARTIES[party], seats_column=SEATS)
+    state = st.selectbox("State", ["All", *sorted(states[STATE].unique())])
+    if state != "All":
+        states = states.loc[states[STATE].eq(state)]
+    area = "National" if state == "All" else state
 
     if mode == "Percentage":
         metric = PERCENT
         hover = [WOMEN_2026, SEATS]
-        colors = {"color_continuous_scale": "Purples", "range_color": (0, 100)}
+        colors = {
+            "color_continuous_scale": [
+                "#eee5fa",
+                "#c39ae9",
+                "#9555cf",
+                "#7025ad",
+                "#4b087d",
+            ],
+            "range_color": (0, 100),
+        }
         st.metric(
-            "National Percentage in 2026",
+            f"{area} Percentage in 2026",
             f"{states[WOMEN_2026].sum() / states[SEATS].sum():.1%}",
         )
         st.caption(
@@ -81,10 +98,10 @@ def main():
         hover = [WOMEN_2024, WOMEN_2026]
         limit = max(1, int(states[CHANGE].abs().max()))
         colors = {
-            "color_continuous_scale": ["#b2182b", "#f7f7f7", "#542788"],
+            "color_continuous_scale": ["#c8102e", "#f7f7f7", "#6420a0"],
             "range_color": (-limit, limit),
         }
-        st.metric("National Change between 2024 and 2026", f"{states[CHANGE].sum():+d}")
+        st.metric(f"{area} Change between 2024 and 2026", f"{states[CHANGE].sum():+d}")
         st.caption(
             "Women in 2026 minus women in 2024 for the selected party. "
             "A positive value indicates an increase."
@@ -97,7 +114,7 @@ def main():
         locationmode="USA-states",
         scope="usa",
         color=metric,
-        hover_name=STATE,
+        hover_name=states[STATE] + " - " + states[STATE_NAME],
         hover_data={
             STATE: False,
             metric: ":.1f" if metric == PERCENT else ":+d",
@@ -105,10 +122,28 @@ def main():
         },
         **colors,
     )
+    fig.add_trace(
+        go.Scattergeo(
+            locations=states[STATE],
+            locationmode="USA-states",
+            mode="text",
+            text=states[STATE],
+            textfont={
+                "size": 11,
+                "color": "#222222",
+                "weight": "normal",
+                # "shadow": "0 0 3px white, 0 0 5px white",
+            },
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
     fig.update_layout(margin={"l": 0, "r": 0, "t": 0, "b": 0})
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     st.dataframe(
-        states[[STATE, *hover, metric]].sort_values(metric, ascending=False),
+        states[[STATE, STATE_NAME, *hover, metric]].sort_values(
+            metric, ascending=False
+        ),
         hide_index=True,
         column_config={metric: st.column_config.NumberColumn(format=number_format)},
     )

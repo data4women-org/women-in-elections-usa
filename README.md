@@ -11,6 +11,7 @@ The analysis uses Python, pandas, and Plotly. Data cleaning, comparisons, and ma
 - [`notebooks/EDA.ipynb`](notebooks/EDA.ipynb): main analysis notebook.
 - [`app.py`](app.py): Streamlit dashboard for the two state maps.
 - `data/`: local datasets and exports.
+- `data/metadata.json`: shared data update date (`last_update`) displayed in the app and EDA notebook. Update this value when refreshing the data.
 - `notebooks/*.png`: exploratory maps.
 
 ## Getting started

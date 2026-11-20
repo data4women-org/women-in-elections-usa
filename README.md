@@ -79,3 +79,9 @@ Election returns are hosted on **Harvard Dataverse**:
 - Senate data (`senate_2022.csv`): [Harvard Dataverse, file ID 7412054, version 3.0](https://dataverse.harvard.edu/file.xhtml?fileId=7412054&version=3.0). Full dataset citation and coverage are still to be verified.
 
 References reviewed on November 5, 2026. CAWP's live data may change as election results and officeholder records are updated. Candidate lists and elected-member counts need to be distinguished when making comparisons.
+
+## Website synchronization
+
+After a PR is merged into `main`, `.github/workflows/sync-dashboard.yml` copies the generated `index.html` to `data4women-org/data4women-org.github.io` and commits it only if changed. Include the regenerated HTML in the PR. Direct pushes and unmerged PR closures do not synchronize the website; no scheduled job runs.
+
+Set the Actions secret `WEBSITE_SYNC_TOKEN` to a fine-grained token limited to the website repository with Contents read/write permission. Its owner must be allowed to push to the website's `main`. The website deployment workflow must already be on `main` and GitHub Pages must use GitHub Actions. See the website README for activation steps. The workflow handles only the committed HTML; it does not execute source Python code.

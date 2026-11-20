@@ -1,10 +1,9 @@
+import base64
 import json
 from pathlib import Path
 
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import streamlit as st
+from plotly.offline import get_plotlyjs
 
 DATA = Path(__file__).resolve().parent / "data"
 STATE = "State"
@@ -17,7 +16,6 @@ CHANGE = "Difference (2026 − 2024)"
 PARTIES = {"All": None, "Democratic": "D", "Republican": "R"}
 
 
-@st.cache_data
 def load_data(party=None, seats_column=SEATS):
     results = pd.read_csv(
         DATA / "1976-2024-house.tab",
@@ -57,99 +55,22 @@ def load_data(party=None, seats_column=SEATS):
 
 
 def main():
-    st.set_page_config(
-        page_title="Women in the U.S. House of Representatives", layout="wide"
-    )
-    st.title("Women in the U.S. House of Representatives")
+    """Build a browser-only dashboard with embedded data and Plotly."""
+    payload = {
+        party: load_data(code).to_dict(orient="records")
+        for party, code in PARTIES.items()
+    }
     metadata = json.loads((DATA / "metadata.json").read_text(encoding="utf-8"))
-    st.caption(f"Last update: {metadata['last_update']}")
-    mode = st.radio("View", ["Percentage", "Absolute Difference"], horizontal=True)
-    party = st.selectbox("Party", list(PARTIES), index=0)
-    states = load_data(PARTIES[party], seats_column=SEATS)
-    state = st.selectbox("State", ["All", *sorted(states[STATE].unique())])
-    if state != "All":
-        states = states.loc[states[STATE].eq(state)]
-    area = "National" if state == "All" else state
-
-    if mode == "Percentage":
-        metric = PERCENT
-        hover = [WOMEN_2026, SEATS]
-        colors = {
-            "color_continuous_scale": [
-                "#eee5fa",
-                "#c39ae9",
-                "#9555cf",
-                "#7025ad",
-                "#4b087d",
-            ],
-            "range_color": (0, 100),
-        }
-        st.metric(
-            f"{area} Percentage in 2026",
-            f"{states[WOMEN_2026].sum() / states[SEATS].sum():.1%}",
-        )
-        st.caption(
-            "Share of all House seats in each state won by women from the selected "
-            "party in 2026. All includes women from every party."
-        )
-        number_format = "%.1f %%"
-    else:
-        metric = CHANGE
-        hover = [WOMEN_2024, WOMEN_2026]
-        limit = max(1, int(states[CHANGE].abs().max()))
-        colors = {
-            "color_continuous_scale": ["#c8102e", "#f7f7f7", "#6420a0"],
-            "range_color": (-limit, limit),
-        }
-        st.metric(f"{area} Change between 2024 and 2026", f"{states[CHANGE].sum():+d}")
-        st.caption(
-            "Women in 2026 minus women in 2024 for the selected party. "
-            "A positive value indicates an increase."
-        )
-        number_format = "%+d"
-
-    fig = px.choropleth(
-        states,
-        locations=STATE,
-        locationmode="USA-states",
-        scope="usa",
-        color=metric,
-        hover_name=states[STATE] + " - " + states[STATE_NAME],
-        hover_data={
-            STATE: False,
-            metric: ":.1f" if metric == PERCENT else ":+d",
-            **dict.fromkeys(hover, True),
-        },
-        **colors,
-    )
-    fig.add_trace(
-        go.Scattergeo(
-            locations=states[STATE],
-            locationmode="USA-states",
-            mode="text",
-            text=states[STATE],
-            textfont={
-                "size": 11,
-                "color": "#222222",
-                "weight": "normal",
-                # "shadow": "0 0 3px white, 0 0 5px white",
-            },
-            hoverinfo="skip",
-            showlegend=False,
-        )
-    )
-    fig.update_layout(margin={"l": 0, "r": 0, "t": 0, "b": 0})
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-    st.dataframe(
-        states[[STATE, STATE_NAME, *hover, metric]].sort_values(
-            metric, ascending=False
-        ),
-        hide_index=True,
-        column_config={metric: st.column_config.NumberColumn(format=number_format)},
-    )
-    st.caption(
-        "Sources: CAWP (Rutgers University) and MIT Election Data and Science Lab. Local data from the notebook."
-    )
+    template = (Path(__file__).parent / "dashboard.html").read_text(encoding="utf-8")
+    html = template.replace("/* PLOTLY_LIBRARY */", get_plotlyjs())
+    html = html.replace("/* DASHBOARD_DATA */", json.dumps(payload).replace("<", "\\u003c"))
+    html = html.replace("/* METADATA */", json.dumps(metadata).replace("<", "\\u003c"))
+    logo = Path(__file__).parent / "assets" / "data4women_logo_dark.png"
+    logo_uri = "data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode("ascii")
+    html = html.replace("assets/data4women_logo_dark.png", logo_uri)
+    output = Path(__file__).parent / "index.html"
+    output.write_text(html, encoding="utf-8")
+    print(f"Created {output}")
 
 
 if __name__ == "__main__":

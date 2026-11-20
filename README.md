@@ -9,22 +9,50 @@ The analysis uses Python, pandas, and Plotly. Data cleaning, comparisons, and ma
 ## Project files
 
 - [`notebooks/EDA.ipynb`](notebooks/EDA.ipynb): main analysis notebook.
-- [`app.py`](app.py): Streamlit dashboard for the two state maps.
+- [`index.html`](index.html): browser dashboard with view, party, and state filters.
+- [`app.py`](app.py): generates the HTML from the local datasets.
+- [`dashboard.html`](dashboard.html): dashboard template, including layout, filters, and map interactions.
+- [`assets/data4women_logo_dark.png`](assets/data4women_logo_dark.png): Data4Women logo, displayed at the top right and embedded in the generated HTML.
 - `data/`: local datasets and exports.
 - `data/metadata.json`: shared data update date (`last_update`) displayed in the app and EDA notebook. Update this value when refreshing the data.
 - `notebooks/*.png`: exploratory maps.
 
 ## Getting started
 
-Requires Python 3.14+ and [uv](https://docs.astral.sh/uv/).
+Open [`index.html`](index.html) directly in your browser. No Python server or Streamlit is required to use the dashboard. The filters, summary, and table work offline; the map requires internet access to load geographic boundaries. Plotly and the aggregated state data are embedded in the generated HTML.
 
-Run the dashboard locally:
+On macOS, you can also open it from the project directory:
 
 ```bash
-uv run streamlit run app.py
+open index.html
 ```
 
-The single view selector switches between the share of House seats won by women in 2024 and the change in the number of women from 2024 to 2026 (2026 minus 2024). The map and state table use the local datasets in `data/`.
+The header displays the Data4Women logo, the author credit **By: Loreto**, and the last update from `data/metadata.json`.
+
+The view selector switches between the share of all House seats held by women in the 2026 dataset and the change in the number of women between 2024 and 2026. Party and state filters update the summary, map, and table together. The percentage denominator includes all seats in the selected states, regardless of party.
+
+The map supports zoom from **1× to 3×**. Its center is constrained around the U.S. region, with more movement allowed as you zoom in. At 1×, the center stays fixed. Use **Reset map** to return to the initial view. These interaction limits have been checked programmatically; browser interaction still needs visual verification.
+
+## Updating the dashboard
+
+Generation requires Python 3.14+ and [uv](https://docs.astral.sh/uv/). The dashboard reads these local files:
+
+- `data/1976-2024-house.tab`: 2024 House districts, used for state seat totals; Washington, D.C. is excluded.
+- `data/women_candidates_2024.xlsx`, sheet `Data`: women with office `U.S. Rep.` and general election result `W`.
+- `data/2026 Women congress.xlsx`, sheet `Data`: women with office `U.S. Representative`.
+- `data/metadata.json`: update date shown in the header.
+
+The 2026 seat totals use the 2024 apportionment. Women are deduplicated by state, first name, last name, and party before counting.
+
+After changing the source data, update `last_update` in `data/metadata.json` and regenerate the HTML:
+
+```bash
+uv run python app.py
+```
+
+Regenerate after editing `dashboard.html` or replacing the logo as well. Reopen or reload `index.html` to see the changes. The generated file embeds Plotly, aggregated state data, and the logo, so it can be shared on its own; map boundaries still require internet access.
+
+## Analysis notebook
 
 To open the notebook:
 

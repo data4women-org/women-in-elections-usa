@@ -1,0 +1,47 @@
+name: Sync dashboard after merge
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-dashboard-to-website
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out merged dashboard
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: dashboard
+          persist-credentials: false
+      - name: Check out website
+        uses: actions/checkout@v4
+        with:
+          repository: data4women-org/data4women-org.github.io
+          ref: main
+          path: website
+          token: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+      - name: Copy dashboard and publish change
+        working-directory: website
+        run: |
+          test -s ../dashboard/index.html
+          mkdir -p assets/women-in-elections-usa
+          cp ../dashboard/index.html assets/women-in-elections-usa/index.html
+          git add assets/women-in-elections-usa/index.html
+          if git diff --cached --quiet; then
+            echo "Dashboard is already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update U.S. House dashboard after source merge"
+          git push origin HEAD:main

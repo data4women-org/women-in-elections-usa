@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Women in the U.S. House of Representatives</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#251333;background:#f7f5fa;font-size:16px}body{margin:0}main{max-width:1180px;margin:auto;padding:40px 24px}h1{font-size:clamp(1.7rem,4vw,2.5rem);margin:0 0 12px}p{line-height:1.6}.muted,footer{color:#665b70}.controls{display:flex;gap:24px;flex-wrap:wrap;margin:28px 0}label{display:flex;flex-direction:column;gap:8px;font-weight:600;flex:1;min-width:180px}select{font:inherit;color:inherit;padding:12px;background:white;border:1px solid #bdb2c8;border-radius:8px}select:focus-visible{outline:3px solid #9555cf}.panel{background:white;border:1px solid #e3dce9;border-radius:14px;padding:24px;margin:20px 0}.value{font-size:2.5rem;font-weight:700;color:#7025ad}#map{height:520px}#map-status{color:#665b70}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:14px 12px;border-bottom:1px solid #e3dce9;white-space:nowrap}th{background:#f2edf7}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}caption{text-align:left;font-size:1.2rem;font-weight:650;padding-bottom:16px}footer{font-size:.9rem;line-height:1.6}@media(max-width:600px){main{padding:24px 12px}.panel{padding:16px}#map{height:350px}}
+.dashboard-header{display:flex;align-items:flex-start;gap:28px}.brand-logo{width:320px;max-width:100%;height:auto;flex-shrink:0;margin-top:-20px}.header-text{min-width:0;flex:1}@media(max-width:760px){.dashboard-header{flex-direction:column;align-items:stretch;gap:16px}.brand-logo{align-self:flex-end}.brand-logo{width:260px;margin-top:0}}
+button{font:inherit;background:#7025ad;color:white;border:0;border-radius:8px;padding:10px 16px;cursor:pointer}button:focus-visible{outline:3px solid #c39ae9;outline-offset:3px}
+</style>
+<script>/* PLOTLY_LIBRARY */</script>
+</head>
+<body><main>
+<header class="dashboard-header">
+<div class="header-text"><h1>Women in the U.S. House of Representatives</h1>
+<p class="muted" id="updated"></p></div>
+<img class="brand-logo" src="assets/data4women_logo_dark.png" alt="Data4Women">
+</header>
+<div class="controls">
+<label>View<select id="view"><option value="percent">Percentage</option><option value="change">Absolute Difference</option></select></label>
+<label>Party<select id="party"><option>All</option><option>Democratic</option><option>Republican</option></select></label>
+<label>State<select id="state"><option value="All">All</option></select></label>
+</div>
+<section class="panel" aria-live="polite"><div id="metric-label"></div><div class="value" id="metric"></div><p id="explanation"></p></section>
+<section class="panel" aria-label="Map of women's representation"><button type="button" id="reset-map">Reset map</button><div id="map"></div><p id="map-status">The map requires an internet connection to load geographic boundaries. The filters and table work offline.</p></section>
+<section class="panel table-wrap"><table><caption id="table-caption">State results</caption><thead id="head"></thead><tbody id="rows"></tbody></table></section>
+<footer>Sources: CAWP (Rutgers University) and MIT Election Data and Science Lab. Local datasets.<br>The 2026 seat totals use the 2024 apportionment. Washington, D.C. is excluded. Results reflect the data update shown above.</footer>
+</main>
+<script>
+const datasets = /* DASHBOARD_DATA */;
+const metadata = /* METADATA */;
+const W24='Women in 2024',W26='Women in 2026',SEATS='Seats in 2026',PERCENT='Women in 2026 (%)',CHANGE='Difference (2026 − 2024)';
+const el=id=>document.getElementById(id);
+el('updated').textContent=`By: Loreto Agüero · Last update: ${metadata.last_update}`;
+for(const row of [...datasets.All].sort((a,b)=>a['State Name'].localeCompare(b['State Name']))){const opt=document.createElement('option');opt.value=row.State;opt.textContent=`${row['State Name']} (${row.State})`;el('state').append(opt);}
+const signed=n=>n>=0?`+${n}`:`${n}`;
+function render(){
+const percentage=el('view').value==='percent',state=el('state').value;
+const rows=datasets[el('party').value].filter(r=>state==='All'||r.State===state);
+const metric=percentage?PERCENT:CHANGE;
+const sum=key=>rows.reduce((total,r)=>total+r[key],0);
+el('metric-label').textContent=`${state==='All'?'National':rows[0]['State Name']} · ${percentage?'Percentage in 2026':'Change between 2024 and 2026'}`;
+el('metric').textContent=percentage?`${(100*sum(W26)/sum(SEATS)).toFixed(1)}%`:signed(sum(CHANGE));
+el('explanation').textContent=percentage?'Share of all House seats in each state held by women from the selected party in the 2026 dataset. All includes women from every party.':'Women in 2026 minus women in 2024 for the selected party. A positive value indicates an increase.';
+const columns=['State','State Name',...(percentage?[W26,SEATS,PERCENT]:[W24,W26,CHANGE])];
+el('head').replaceChildren();const header=document.createElement('tr');for(const col of columns){const th=document.createElement('th');th.scope='col';th.textContent=col;header.append(th);}el('head').append(header);
+el('rows').replaceChildren();for(const row of [...rows].sort((a,b)=>b[metric]-a[metric]||a.State.localeCompare(b.State))){const tr=document.createElement('tr');for(const col of columns){const td=document.createElement('td');td.textContent=col===PERCENT?`${row[col].toFixed(1)}%`:col===CHANGE?signed(row[col]):row[col];tr.append(td);}el('rows').append(tr);}
+el('table-caption').textContent=`State results · ${el('party').value} · ${rows.length} ${rows.length===1?'state':'states'}`;
+const limit=Math.max(1,...rows.map(r=>Math.abs(r[CHANGE])));
+Plotly.react('map',[{type:'choropleth',locations:rows.map(r=>r.State),locationmode:'USA-states',z:rows.map(r=>r[metric]),zmin:percentage?0:-limit,zmax:percentage?100:limit,colorscale:percentage?[[0,'#eee5fa'],[.25,'#c39ae9'],[.5,'#9555cf'],[.75,'#7025ad'],[1,'#4b087d']]:[[0,'#c8102e'],[.5,'#f7f7f7'],[1,'#6420a0']],text:rows.map(r=>`${r.State} — ${r['State Name']}`),customdata:rows.map(r=>[r[W24],r[W26],r[SEATS]]),hovertemplate:percentage?'%{text}<br>Women in 2026: %{customdata[1]}<br>Seats: %{customdata[2]}<br>%{z:.1f}%<extra></extra>':'%{text}<br>Women in 2024: %{customdata[0]}<br>Women in 2026: %{customdata[1]}<br>Change: %{z:+d}<extra></extra>',colorbar:{title:{text:percentage?'%':'Change'}}},{type:'scattergeo',locations:rows.map(r=>r.State),locationmode:'USA-states',mode:'text',text:rows.map(r=>r.State),textfont:{size:11,color:'#222'},hoverinfo:'skip',showlegend:false}],{geo:{scope:'usa',bgcolor:'white',fitbounds:false,center:{lon:-96,lat:38},projection:{scale:1,minscale:1,maxscale:3}},margin:{l:0,r:0,t:0,b:0},paper_bgcolor:'white'},{responsive:true,displayModeBar:false,scrollZoom:true,doubleClick:false}).then(bindMapLimits).catch(()=>{el('map-status').textContent='Map unavailable. Connect to the internet to load geographic boundaries; filtered results remain available in the table.';});
+}
+// Keep the map center within the U.S. region after a drag or wheel zoom.
+let correctingMap=false;
+const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+function boundedView(geo){
+ const scale=clamp(geo.projection.scale,1,3);
+ // At the full-country view, keep the center fixed. Allow more travel when zoomed in.
+ const travel=1-1/scale;
+ return {'geo.projection.scale':scale,
+ 'geo.center.lon':clamp(geo.center.lon,-96-36*travel,-96+36*travel),
+ 'geo.center.lat':clamp(geo.center.lat,38-24*travel,38+24*travel)};
+}
+function bindMapLimits(){
+ const map=el('map');
+ if(map.limitsBound)return;
+ map.limitsBound=true;
+ map.on('plotly_relayout',()=>{
+  if(correctingMap)return;
+  const geo=map._fullLayout.geo,update=boundedView(geo);
+  if(Math.abs(update['geo.projection.scale']-geo.projection.scale)<1e-6&&
+     Math.abs(update['geo.center.lon']-geo.center.lon)<1e-6&&
+     Math.abs(update['geo.center.lat']-geo.center.lat)<1e-6)return;
+  correctingMap=true;
+  Plotly.relayout(map,update).finally(()=>{correctingMap=false;});
+ });
+}
+el('reset-map').addEventListener('click',()=>Plotly.relayout(el('map'),{
+ 'geo.projection.scale':1,'geo.center.lon':-96,'geo.center.lat':38
+}));
+for(const id of ['view','party','state'])el(id).addEventListener('change',render);
+render();
+</script></body></html>
